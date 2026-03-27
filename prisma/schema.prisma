@@ -1,0 +1,135 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+enum Role {
+  ADMIN
+  CUSTOMER
+  SUPPORT
+}
+
+enum SearchStatus {
+  PENDING
+  SCRAPING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+//////////////////////////////////////////////////////
+// MODELS
+//////////////////////////////////////////////////////
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  fname      String?
+  lname      String?
+  password  String
+  role      Role     @default(CUSTOMER)
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  country      String?
+  postalCode   String?
+  phone        String?
+
+  searches  SearchHistory[]
+  watchlist Watchlist[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SearchHistory {
+  id            String         @id @default(cuid())
+  query         String
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id])
+  country       String         @default("us") 
+  currency      String         @default("USD")
+  totalProducts Int            @default(0)
+  products      Product[]
+  aiAnalysis    AIAnalysis?
+  status        SearchStatus   @default(PENDING)
+  responseTime  Int?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime       @default(now())
+  @@index([query])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([query, country])
+}
+
+model Product {
+  id             String         @id @default(cuid())
+  searchId       String
+  search         SearchHistory  @relation(fields: [searchId], references: [id], onDelete: Cascade)
+
+  title          String
+  price          Float?
+  originalPrice  Float?
+  rating         Float?
+  reviewsCount   Int?
+  imageUrl       String?
+  productUrl     String?
+  source         String
+
+  summary        String?        @db.Text
+  pros           String[]       @default([])
+  cons           String[]       @default([])
+  sentimentScore Float?
+
+  createdAt      DateTime       @default(now())
+
+  @@index([searchId])
+}
+
+model AIAnalysis {
+  id             String         @id @default(cuid())
+  searchId       String         @unique
+  search         SearchHistory  @relation(fields: [searchId], references: [id], onDelete: Cascade)
+
+  summary        String         @db.Text
+  bestPick       String?
+  pros           String[]
+  cons           String[]
+  priceAnalysis  String?        @db.Text
+  buyingAdvice   String?        @db.Text
+
+  model          String
+  tokensUsed     Int
+  processingTime Int?
+
+  createdAt      DateTime       @default(now())
+}
+
+model Watchlist {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  productId  String
+  title      String
+  price      Float?
+  imageUrl   String?
+  productUrl String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
