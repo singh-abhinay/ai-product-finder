@@ -1,4 +1,4 @@
-🚀 AI Product Finder
+🚀 AI Product Finder 
 AI-powered product discovery platform that aggregates products from multiple sources and provides intelligent insights to help users make better buying decisions.
 
 ✨ Features
