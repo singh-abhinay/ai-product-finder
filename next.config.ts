@@ -40,9 +40,22 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // Add serpapi.com to allowed domains
+      {
+        protocol: 'https',
+        hostname: 'serpapi.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.serpapi.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
-  
+
   webpack(config) {
     config.module.rules.push({
       test: /\.svg$/,
@@ -50,7 +63,7 @@ const nextConfig: NextConfig = {
     });
     return config;
   },
-    
+
   turbopack: {
     rules: {
       '*.svg': {

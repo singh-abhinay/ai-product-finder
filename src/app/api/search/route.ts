@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { SerpAPIService } from "@/lib/services/serpapi";
 import { GroqService } from "@/lib/services/groq";
 import { prisma } from "@/lib/prisma";
-import countryToCurrency from "country-to-currency"; // ✅ Correct import (default import)
+import countryToCurrency from "country-to-currency";
 
 export async function POST(req: Request) {
   try {
@@ -99,21 +99,35 @@ export async function POST(req: Request) {
       })),
     });
 
-    // Save AI analysis
+    // Save AI analysis with string conversion for objects
     await prisma.aIAnalysis.create({
       data: {
         searchId: searchHistory.id,
         summary:
           aiInsights.summary ||
           `Analysis of ${products.length} products for "${query}"`,
-        bestPick:
-          aiInsights.bestChoice || products[0]?.title || null,
+        bestPick: (() => {
+          if (!aiInsights.bestChoice) return products[0]?.title || null;
+          if (typeof aiInsights.bestChoice === 'string') return aiInsights.bestChoice;
+          if (typeof aiInsights.bestChoice === 'object') {
+            if (aiInsights.bestChoice.title) return aiInsights.bestChoice.title;
+            return JSON.stringify(aiInsights.bestChoice);
+          }
+          return products[0]?.title || null;
+        })(),
         pros: aiInsights.pros || [],
         cons: aiInsights.cons || [],
-        priceAnalysis: aiInsights.comparison || null,
+        priceAnalysis: (() => {
+          if (!aiInsights.comparison) return null;
+          if (typeof aiInsights.comparison === 'string') return aiInsights.comparison;
+          if (typeof aiInsights.comparison === 'object') {
+            return JSON.stringify(aiInsights.comparison);
+          }
+          return null;
+        })(),
         buyingAdvice:
           aiInsights.recommendation ||
-          aiInsights.recommendations?.join("\n") ||
+          (aiInsights.recommendations && aiInsights.recommendations.join("\n")) ||
           null,
         model: "llama-3.1-8b-instant",
         tokensUsed: 0,

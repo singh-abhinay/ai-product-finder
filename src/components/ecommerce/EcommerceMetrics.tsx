@@ -1,9 +1,35 @@
 "use client";
-import React from "react";
+import React, { use } from "react";
 import Badge from "../ui/badge/Badge";
 import { ArrowDownIcon, ArrowUpIcon, BoxIconLine, GroupIcon } from "@/icons";
+import { useState, useEffect } from "react";
 
 export const EcommerceMetrics = () => {
+  const [metrics, setMetrics] = useState({
+    customers: 0,
+    orders: 0,
+    customerGrowth: 0,
+    orderDecline: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const res = await fetch("/api/admin/customers/metrics");
+        const data = await res.json();
+        setMetrics(data);
+      } catch (error) {
+        console.error("Error fetching metrics:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, []);
+
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6">
       {/* <!-- Metric Item Start --> */}
@@ -18,7 +44,7 @@ export const EcommerceMetrics = () => {
               Customers
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              3,782
+              {metrics.customers.toLocaleString()}
             </h4>
           </div>
           <Badge color="success">
@@ -37,10 +63,10 @@ export const EcommerceMetrics = () => {
         <div className="flex items-end justify-between mt-5">
           <div>
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              Orders
+              Total Keyword Search
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              5,359
+              {metrics.orders.toLocaleString()}
             </h4>
           </div>
 

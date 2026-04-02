@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
     try {
-        // Get user info from cookie
         const userInfoCookie = request.cookies.get("userInfo");
 
         if (!userInfoCookie) {
@@ -35,7 +34,6 @@ export async function GET(request: NextRequest) {
         // Get all searches for the user
         const userSearches = await prisma.searchHistory.findMany({
             where: {
-                userId,
                 status: "COMPLETED"
             },
             orderBy: {

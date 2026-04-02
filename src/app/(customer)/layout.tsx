@@ -2,7 +2,7 @@
 
 import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/CustomerSidebar";
+import UnifiedSidebar from "@/layout/UnifiedSidebar";
 import Backdrop from "@/layout/Backdrop";
 import React from "react";
 
@@ -17,13 +17,13 @@ export default function AdminLayout({
   const mainContentMargin = isMobileOpen
     ? "ml-0"
     : isExpanded || isHovered
-    ? "lg:ml-[290px]"
-    : "lg:ml-[90px]";
+      ? "lg:ml-[290px]"
+      : "lg:ml-[90px]";
 
   return (
     <div className="min-h-screen xl:flex">
       {/* Sidebar and Backdrop */}
-      <AppSidebar />
+      <UnifiedSidebar />
       <Backdrop />
       {/* Main Content Area */}
       <div

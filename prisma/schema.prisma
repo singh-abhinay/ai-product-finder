@@ -46,6 +46,7 @@ model User {
   country      String?
   postalCode   String?
   phone        String?
+  profileImage String?  // Add this field
 
   searches  SearchHistory[]
   watchlist Watchlist[]

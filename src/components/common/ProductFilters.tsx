@@ -1,11 +1,20 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState } from "react";
+import { exportToCSV, exportToPDF, exportToJSON } from "@/lib/exportUtils";
 
 interface Product {
+  id?: string;
+  name?: string;
+  title?: string;
   price: number | null;
+  originalPrice?: number | null;
   currency: string;
   rating?: number | null;
+  reviewsCount?: number | null;
+  source?: string | null;
+  summary?: string | null;
+  productUrl?: string | null;
 }
 
 interface Filters {
@@ -20,7 +29,12 @@ interface ProductFiltersProps {
   setFilters: (filters: Filters) => void;
   categories: string[];
   products: Product[];
+  filteredProducts?: Product[];
   onClearFilters: () => void;
+  dynamicPriceRanges?: Array<{ value: string; label: string; condition: (price: number) => boolean }>;
+  primaryCurrency?: string;
+  getCurrencySymbol?: (currencyCode: string) => string;
+  formatPrice?: (price: number | null, currency: string) => string;
 }
 
 export default function ProductFilters({
@@ -28,13 +42,26 @@ export default function ProductFilters({
   setFilters,
   categories,
   products,
-  onClearFilters
+  filteredProducts = products,
+  onClearFilters,
+  dynamicPriceRanges = [],
+  primaryCurrency = "USD",
+  getCurrencySymbol: externalGetCurrencySymbol,
+  formatPrice: externalFormatPrice
 }: ProductFiltersProps) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
   const hasActiveFilters = useMemo(() => {
     return filters.search || filters.category || filters.price || filters.sort;
   }, [filters]);
 
   const getCurrencySymbol = useCallback((currencyCode: string): string => {
+    if (externalGetCurrencySymbol) {
+      return externalGetCurrencySymbol(currencyCode);
+    }
+
     try {
       const formatter = new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -53,92 +80,22 @@ export default function ProductFilters({
       };
       return symbols[currencyCode] || currencyCode;
     }
-  }, []);
+  }, [externalGetCurrencySymbol]);
 
-  const primaryCurrency = useMemo(() => {
-    const currencies = products.map(p => p.currency).filter(Boolean);
-    if (currencies.length === 0) return "USD";
+  const formatPrice = useCallback((price: number | null, currency: string): string => {
+    if (externalFormatPrice) {
+      return externalFormatPrice(price, currency);
+    }
 
-    const currencyCount = currencies.reduce<Record<string, number>>((acc, curr) => {
-      acc[curr] = (acc[curr] || 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.keys(currencyCount).reduce((a, b) =>
-      currencyCount[a] > currencyCount[b] ? a : b
-    );
-  }, [products]);
+    if (!price) return "N/A";
+    const symbol = getCurrencySymbol(currency);
+    return `${symbol}${price.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    })}`;
+  }, [externalFormatPrice, getCurrencySymbol]);
 
   const currencySymbol = useMemo(() => getCurrencySymbol(primaryCurrency), [getCurrencySymbol, primaryCurrency]);
-
-  const priceRanges = useMemo(() => {
-    const validPrices = products
-      .map(p => p.price)
-      .filter((price): price is number => price !== null && price > 0);
-
-    if (validPrices.length === 0) {
-      return [
-        { value: "low", label: "Low Price", min: 0, max: 50000 },
-        { value: "medium", label: "Medium Price", min: 50000, max: 100000 },
-        { value: "high", label: "High Price", min: 100000, max: Infinity }
-      ];
-    }
-
-    const minPrice = Math.min(...validPrices);
-    const maxPrice = Math.max(...validPrices);
-    const priceRange = maxPrice - minPrice;
-
-    const formatPrice = (price: number) => {
-      if (price >= 1000000) return `${currencySymbol}${(price / 1000000).toFixed(1)}M`;
-      if (price >= 1000) return `${currencySymbol}${(price / 1000).toFixed(0)}K`;
-      return `${currencySymbol}${Math.round(price)}`;
-    };
-
-    const ranges = [];
-
-    if (validPrices.length >= 3) {
-      const segment = priceRange / 3;
-      ranges.push({
-        value: "low",
-        label: `${formatPrice(minPrice)} - ${formatPrice(minPrice + segment)}`,
-        min: minPrice,
-        max: minPrice + segment
-      });
-      ranges.push({
-        value: "medium",
-        label: `${formatPrice(minPrice + segment)} - ${formatPrice(minPrice + (segment * 2))}`,
-        min: minPrice + segment,
-        max: minPrice + (segment * 2)
-      });
-      ranges.push({
-        value: "high",
-        label: `Above ${formatPrice(minPrice + (segment * 2))}`,
-        min: minPrice + (segment * 2),
-        max: Infinity
-      });
-    } else {
-      const midPoint = minPrice + (priceRange / 2);
-      ranges.push({
-        value: "low",
-        label: `${formatPrice(minPrice)} - ${formatPrice(midPoint)}`,
-        min: minPrice,
-        max: midPoint
-      });
-      ranges.push({
-        value: "high",
-        label: `Above ${formatPrice(midPoint)}`,
-        min: midPoint,
-        max: Infinity
-      });
-    }
-
-    return ranges;
-  }, [products, currencySymbol]);
-
-  const getPriceRangeLabel = useCallback((value: string) => {
-    const range = priceRanges.find(r => r.value === value);
-    return range?.label || "";
-  }, [priceRanges]);
 
   const sortOptions = useMemo(() => {
     const options = [
@@ -151,6 +108,11 @@ export default function ProductFilters({
       options.push({ value: "rating", label: "Rating: High to Low" });
     }
 
+    const hasDates = products.some(p => p.summary !== null);
+    if (hasDates) {
+      options.push({ value: "newest", label: "Newest First" });
+    }
+
     return options;
   }, [products]);
 
@@ -160,6 +122,49 @@ export default function ProductFilters({
   ) => {
     setFilters({ ...filters, [key]: value });
   }, [filters, setFilters]);
+
+  const handleExport = async (format: "csv" | "pdf" | "json") => {
+    if (filteredProducts.length === 0) {
+      alert("No products to export");
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    try {
+      const exportOptions = {
+        products: filteredProducts,
+        filters: hasActiveFilters ? filters : undefined,
+        currencySymbol,
+        onProgress: setExportProgress
+      };
+
+      switch (format) {
+        case "csv":
+          await exportToCSV(exportOptions);
+          break;
+        case "pdf":
+          await exportToPDF(exportOptions);
+          break;
+        case "json":
+          await exportToJSON(exportOptions);
+          break;
+      }
+    } catch (error) {
+      console.error(`Error exporting to ${format}:`, error);
+      alert(`Failed to export as ${format.toUpperCase()}. Please try again.`);
+    } finally {
+      setIsExporting(false);
+      setExportProgress(0);
+      setShowExportMenu(false);
+    }
+  };
+
+  const getPriceRangeLabel = useCallback((value: string) => {
+    const range = dynamicPriceRanges.find(r => r.value === value);
+    return range?.label || "";
+  }, [dynamicPriceRanges]);
 
   return (
     <div className="p-4 mb-5 bg-white border rounded-2xl dark:bg-gray-dark dark:border-gray-800">
@@ -187,7 +192,7 @@ export default function ProductFilters({
           ))}
         </select>
 
-        {/* Price Range */}
+        {/* Price Range - Dynamic based on products */}
         <select
           aria-label="Filter by price range"
           className="px-3 py-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow"
@@ -195,7 +200,7 @@ export default function ProductFilters({
           onChange={(e) => handleFilterChange("price", e.target.value)}
         >
           <option value="">All Prices ({currencySymbol})</option>
-          {priceRanges.map((range) => (
+          {dynamicPriceRanges.map((range) => (
             <option key={range.value} value={range.value}>
               {range.label}
             </option>
@@ -217,6 +222,55 @@ export default function ProductFilters({
           ))}
         </select>
 
+        {/* Export Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={isExporting}
+            className="w-full px-3 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                {Math.round(exportProgress)}%
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export
+              </>
+            )}
+          </button>
+
+          {showExportMenu && !isExporting && (
+            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-10">
+              <button
+                onClick={() => handleExport("csv")}
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg"
+              >
+                📊 Export as CSV
+              </button>
+              <button
+                onClick={() => handleExport("pdf")}
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                📄 Export as PDF
+              </button>
+              <button
+                onClick={() => handleExport("json")}
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+              >
+                🔧 Export as JSON
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Clear Filters Button */}
         {hasActiveFilters && (
           <button
@@ -228,6 +282,13 @@ export default function ProductFilters({
           </button>
         )}
       </div>
+
+      {/* Export Info */}
+      {filteredProducts.length > 0 && (
+        <div className="mt-3 text-xs text-gray-400 text-right">
+          {filteredProducts.length} products ready for export
+        </div>
+      )}
 
       {/* Active Filters Display */}
       {hasActiveFilters && (
@@ -261,6 +322,11 @@ export default function ProductFilters({
           {filters.sort === "rating" && (
             <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
               Sort: Top Rated
+            </span>
+          )}
+          {filters.sort === "newest" && (
+            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
+              Sort: Newest First
             </span>
           )}
         </div>

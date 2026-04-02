@@ -52,7 +52,6 @@ export async function POST(req: Request) {
       role: user.role,
     });
 
-    //Set httpOnly token cookie with maxAge
     response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -61,9 +60,8 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    // Set readable userInfo cookie for client
     response.cookies.set("userInfo", JSON.stringify(userInfo), {
-      httpOnly: false, // client can read
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
